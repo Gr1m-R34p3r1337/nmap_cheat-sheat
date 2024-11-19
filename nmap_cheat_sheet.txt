@@ -1,0 +1,440 @@
+NMAP CHEAT SHEET
+
+
+
+! IMPORTANT NOTICE !
+This is not a full-scope cheat sheet about Nmap so I strongly recommend to advise the tool's manual (nmap --help // nmap -h)
+This is a cheat sheet about live host discovery and basic/advanced port scanning techniques
+
+
+
+DISCOVERING LIVE HOSTS
+
+
+1. ARP SCAN (Address Resolution Protocol) == Responsible for finding the MAC address related to a specific IP Address.
+
+HOW IT WORKS
+>>Link Layer
+Broadcasts an ARP Query "Who has this IP Address? Tell me."
+And the response is of the form "The IP Address is at this MAC Address"
+
+COMMAND LINE + FLAGS FOR BETTER RECONNAISSANCE
+sudo nmap -PR -sn -sV TARGET_IP/SUBNET CLASS / sudo arp-scan TARGET_IP/SUBNET CLASS
+-PR: ARP Scan Only
+-sn: Allows to discover live hosts without ping scan
+     (Live host enumeration in a subnet that wont make any noise in the defensive systems)
+-sV: Show version of the service taht runs at the port
+
+
+2. ICMP SCAN (Internety Control Message Protocol) == Mainly used to determine whether or not data is reaching its intended destination in a timely manner.
+
+HOW IT WORKS
+>> Network Layer
+Connectionless Protocol (one device does not need to open a connection with another device)
+Suitable for error harvesting options from a server or router due to the ICMP Header that it is contained in the ICMP Packet
+
+COMMAND LINE + FLAGS FOR BETTER RECONNAISSANCE
+sudo nmap -PE -sn -sV TARGET_IP/SUBNET_CLASS
+-PE: ICMP Scan Only
+
+sudo nmap -PP -sn -sV TARGET_IP/SUBNET_CLASS
+-PP: Allowing ICMP Timestamps Requests
+
+sudo nmap -PM -sn -sV TARGET_IP/SUBNET_CLASS
+-PM: Allowing Address Mask Queries
+
+
+3. TCP/UDP PING SCAN (Transmission Control Protocol // User Datagram Protocol) == Sends Packets across the internet and ensures the succesful delivery of sata and messages over networks // Time sensitive communication protocol that applies for speed-needed communications (gaming, playing videos, or DNS Lookups). Does not care about opening a firm connection but just sends the packets whether the destination is ready to receive or not.
+
+HOW IT WORKS
+>> -/Transport Layer/-
+TCP 3way Handshake (T/SYN -> D/SYN+ACK -> T/ACK) //  Connectionless Protocol
+
+COMMAND LINE + FLAGS FOR BETTER RECONNAISSANCE
+sudo nmap -PS{PORT} -sn -sV TARGET_IP/SUBNET_CLASS
+-PS: TCP SYNC Scan Only
+
+sudo nmap -PA{PORT} -sn -sV TARGET_IP/SUBNET_CLASS
+-PA: TCP ACK Scan Only
+
+//
+
+sudo nmap -PU{PORT} -sn -sV TARGET_IP/SUBNET_CLASS / sudo nmap masscan -sV TARGET_IP/SUBNET_CLASS -p{PORT}
+-PU: UDP Scan Only
+-p: Port Number Specification
+
+
+EXTRA KNOWLEDGE
+Reverse-DNS Lookup
+-R: Allow DNS Queries even for offline hosts
+--dns-servers: Specify the DNS Servers
+
+
+BASIC PORT SCANNING
+
+
+THE SIX STATES OF TCP/UDP PORTS
+Open           : A service is listening on that port (IMPORTANT)
+Closed         : No service is listening on that port, but is accesible (not blocked by firewall/security
+                 appliances/programs)
+Filtered       : Cannot determine whether is open or closed, but not accesible
+Unfiltered     : Cannot determine whether is open or closed. but is accesible
+Open|Filtered  : Cannot determine whether is open or filtered
+Closed|Filtered: Cannot determine whether is closed or filtered
+
+
+TCP Flags
+URG  : Urgent Flag          -> indicates that the incoming data is urgent || is processed immediately without
+                               consideration or having to wait on previously sent TCP Segment
+ACK  : Acknowledgement Flag -> indicates that the acknowledgement number is significant (receipt of a TCP
+                               Segment)
+PSH  : Push Flag            -> asks TCP to pass the data to the applications promptly
+RST  : Reset Flag           -> used to reset the connection / when data is sent to a host and there is no service on the
+                               receiving end to answer
+SYN  : Synchronise Flag     -> used to initiate a TCP 3-way Handshake and synchronise sequence numbers with the other host
+FIN  : Finalise Flag        -> the sender has no more data to send
+
+
+1. TCP CONNECT SCAN
+
+HOW IT WORKS
+3-way TCP Handshake
+
+SCHEME
+ _______________              _______________
+| HOST SCANNING | -> SYN  -> |     TARGET    |
+|    MACHINE    | -> FLAG -> |     MACHINE   |
+ ---------------              ---------------
+
+  _______________                  _______________
+| HOST SCANNING | <- SYN & ACK <- |     TARGET    |
+|    MACHINE    | <- FLAG      <- |     MACHINE   |
+ ---------------                   ---------------
+
+  _______________              _______________
+| HOST SCANNING | -> ACK  -> |     TARGET    |
+|    MACHINE    | -> FLAG -> |     MACHINE   |
+ ---------------              ---------------
+
+  _______________                  _______________
+| HOST SCANNING | -> RST & ACK -> |     TARGET    |
+|    MACHINE    | -> FLAG      -> |     MACHINE   |
+ ---------------                   ---------------
+               case: TCP Port is Open
+
+COMMAND LINE
+sudo nmap -sT -sV TARGET_IP
+
+SYNERGY ADDON FLAGS
+-F: Enabling Fast Mode (port scanning from 1000 to 100 most common ports)
+-r: Enabling Consecutive order (useful when testing whether ports open in consistent manner)
+
+
+2. TCP SYN SCAN (Stealth Mode)
+
+HOW IT WORKS
+Tears down the 3-way TCP Handshake as soon as it receives response from the target machine.
+It is considered stealth scan because the host scan machine didnt establish the TCP Connection so the chances of the scan being logged is decreased
+
+SCHEME
+ _______________              _______________
+| HOST SCANNING | -> SYN  -> |     TARGET    |
+|    MACHINE    | -> FLAG -> |     MACHINE   |
+ ---------------              ---------------
+
+  _______________                  _______________
+| HOST SCANNING | <- SYN & ACK <- |     TARGET    |
+|    MACHINE    | <- FLAG      <- |     MACHINE   |
+ ---------------                   ---------------
+
+   _______________            _______________
+| HOST SCANNING | -> RST  -> |     TARGET    |
+|    MACHINE    | -> FLAG -> |     MACHINE   |
+ ---------------              ---------------
+               case: TCP Port is Open
+
+COMMAND LINE
+sudo nmap -sS -sV TARGET_IP
+
+
+3. UDP SCAN
+
+HOW IT WORKS
+UDP Packets are sent to ports; if its open there is no response, if its closed then an ICMP error (type 3 code 3) is returned
+
+SCHEME
+ _______________                _______________
+| HOST SCANNING | -> UDP    -> |     TARGET    |
+|    MACHINE    | -> PACKET -> |     MACHINE   |
+ ---------------                ---------------
+  case: UDP Port is Open. No response expected
+
+ _______________                _______________
+| HOST SCANNING | -> UDP    -> |     TARGET    |
+|    MACHINE    | -> PACKET -> |     MACHINE   |
+ ---------------                ---------------
+
+  _______________               _______________
+| HOST SCANNING | <- ICMP   <- |     TARGET    |
+|    MACHINE    | <- TYPE 3 <- |     MACHINE   |
+|               | <- CODE 3 <- |               |
+ ---------------                ---------------
+  case: UDP Port is Closed. This leads to ICMP
+            Destination Unreachable
+
+COMMAND LINE
+sudo nmap -sU -sV TARGET_IP
+
+
+EXTRA KNOWLEDGE
+Fine-Tuning Scope and Performance
+
+-p1-999 // -p22,53,80 : Port List
+
+-p- : Scan All the Ports (65535)
+
+-F : Scan the 100 most common ports
+
+--top-ports 10: Scan the 10 most common ports
+
+-T0-5 : Scan Timing Control
+PARANOID   (0) Scans 1 port per 5 min
+SNEAKY     (1) Stealth Mode
+POLITE     (2)
+NORMAL     (3) Default Mode
+AGGRESSIVE (4) CTF Mode or Practice Mode
+INSANE     (5)
+
+--min-rate=10 : Set Minimum Packet Rate
+
+--max-rate=10 : Set Maximum Packet Rate
+
+--min-parallelism=10 : Set Minimum Number of Probes being Parallelised
+
+--max-parallelism=10 : Set Maximum Number of Probes being Parallelised
+
+
+ADVANCED PORT SCANS
+
+1. NULL SCAN
+
+HOW IT WORKS
+Does not send any flag; all six flag bits set to zero.
+The lack of reply indicates that either the port is open or a firewall is blocking the packet
+
+SCHEME
+ _______________                        _______________
+| HOST SCANNING | -> NULL           -> |     TARGET    |
+|    MACHINE    | -> (no flags set) -> |     MACHINE   |
+ ---------------                        ---------------
+                 case: TCP Port is Open
+
+ _______________                        _______________
+| HOST SCANNING | -> NULL           -> |     TARGET    |
+|    MACHINE    | -> (no flags set) -> |     MACHINE   |
+ ---------------                        ---------------
+
+  _______________                  _______________
+| HOST SCANNING | <- RST & ACK <- |     TARGET    |
+|    MACHINE    | <- FLAG      <- |     MACHINE   |
+ ---------------                   ---------------
+                case: TCP Port is Closed
+
+COMMAND LINE
+sudo nmap -sN -sV TARGET_IP
+
+
+2. FIN SCAN
+
+HOW IT WORKS
+Sends a TCP Packet with the FIN Flag.
+No response will be sent if the TCP Port is open
+Nmap cannot be sure if the port is open or if a firewall is blocking the traffic realted to this TCP Port
+
+SCHEME
+ _______________              _______________
+| HOST SCANNING | -> FIN  -> |     TARGET    |
+|    MACHINE    | -> FLAG -> |     MACHINE   |
+ ---------------              ---------------
+              case: TCP Port is Open
+
+ _______________              _______________
+| HOST SCANNING | -> FIN  -> |     TARGET    |
+|    MACHINE    | -> FLAG -> |     MACHINE   |
+ ---------------              ---------------
+
+  _______________                  _______________
+| HOST SCANNING | <- RST & ACK <- |     TARGET    |
+|    MACHINE    | <- FLAG      <- |     MACHINE   |
+ ---------------                   ---------------
+              case: TCP Port is Closed
+
+COMMAND LINE
+sudo nmap -sF -sV TARGET_IP
+
+
+3. XMAS SCAN
+
+HOW IT WORKS
+Sets FIN, PSH and URG Flags simutaneously.
+If an RST Flag is received it means that the port is closed.
+Otherwise, it will be reported as open|filtered
+
+SCHEME
+ _______________                   _______________
+| HOST SCANNING | -> FIN &     -> |     TARGET    |
+|    MACHINE    | -> PSH & URG -> |     MACHINE   |
+|               | -> FLAG      -> |               |
+ ---------------                   ---------------
+              case: TCP Port is Open
+
+ _______________                   _______________
+| HOST SCANNING | -> FIN &     -> |     TARGET    |
+|    MACHINE    | -> PSH & URG -> |     MACHINE   |
+|               | -> FLAG      -> |               |
+ ---------------                   ---------------
+
+  _______________                  _______________
+| HOST SCANNING | <- RST & ACK <- |     TARGET    |
+|    MACHINE    | <- FLAG      <- |     MACHINE   |
+ ---------------                   ---------------
+              case: TCP Port is Closed
+
+COMMAND LINE
+sudo nmap -sX -sV TARGET_IP
+
+
+GENERAL KNOWLEDGE
+One scenario where these three scan types can be efficient is when scanning a target behind a stateless (non-stateful) firewall. A stateless firewall will check if the incoming packet has the SYN flag set to detect a connection attempt. Using a flag combination that does not match the SYN packet makes it possible to deceive the firewall and reach the system behind it. However, a stateful firewall will practically block all such crafted packets and render this kind of scan useless
+
+
+4. TCP MAIMON SCAN
+This scan mode is referred in memorial of Uriel Maimon
+
+HOW IT WORKS
+Sets FIN and ACK Flags. The target should send an RST packet as a repsonse. However, certain BSD-derived systems frop the packet if it is an open port exposing the open ports.
+This scan wont work on mosttargets encountered in modern networks
+
+SCHEME
+ _______________                    _______________
+| HOST SCANNING | -> FIN & ACK  -> |     TARGET    |
+|    MACHINE    | -> FLAG       -> |     MACHINE   |
+ ---------------                    ---------------
+
+ _______________              _______________
+| HOST SCANNING | <- RST  <- |     TARGET    |
+|    MACHINE    | <- FLAG <- |     MACHINE   |
+ ---------------              ---------------
+        case: TCP Port is Open or Closed
+              Certain systems drop the Packet if the
+              Port is Open
+
+COMMAND LINE
+sudo nmap -sM -sV TARGET_IP
+
+GENERAL KNOWLEDGE
+Here is a list of BSD-derived systems on which the Maimon TCP scan can work:
+FreeBSD       : A widely-used, open-source operating system derived from the original BSD UNIX. FreeBSD's
+                TCP/IP stack is known to exhibit the characteristics that Maimon scans exploit.
+
+OpenBSD       : Another open-source OS that focuses on security and code correctness. It inherits the BSD
+                TCP/IP stack, making it susceptible to Maimon TCP scans.
+
+NetBSD        : Known for its portability across different hardware platforms, NetBSD is another OS
+                derived from BSD UNIX with a TCP/IP stack that is vulnerable to Maimon scans.
+
+DragonFly BSD : A fork of FreeBSD, DragonFly BSD retains much of the original TCP/IP stack, allowing
+                Maimon scans to be effective.
+
+Darwin        : The open-source core of macOS and iOS, derived from NeXTSTEP and BSD UNIX. Its TCP/IP
+                stack has roots in BSD, so Maimon scans could potentially work.
+
+macOS (OS X)  : Apple's operating system for Mac computers, which is built on the Darwin kernel and hence
+                shares the BSD TCP/IP stack, is also susceptible to Maimon TCP scans.
+
+Junos OS      : A network operating system used in Juniper Networks routers and switches. It is derived
+                from FreeBSD, making its TCP/IP stack potentially vulnerable to Maimon scans.
+
+TrueNAS       : A FreeBSD-based storage operating system that might exhibit the behavior needed for
+                Maimon TCP scans to work.
+
+pfSense       : An open-source firewall/router OS based on FreeBSD, which can also be susceptible to
+                Maimon TCP scans.
+
+
+5. TCP ACK SCAN
+
+HOW IT WORKS
+An ACK Scan will send a TCP Packet with the ACK Flag set. The target will respond with RST regardless of the state of the port.
+
+SCHEME
+  _______________              _______________
+| HOST SCANNING | -> ACK  -> |     TARGET    |
+|    MACHINE    | -> FLAG -> |     MACHINE   |
+ ---------------              ---------------
+
+ _______________              _______________
+| HOST SCANNING | <- RST  <- |     TARGET    |
+|    MACHINE    | <- FLAG <- |     MACHINE   |
+ ---------------              ---------------
+        case: TCP Port is open or closed
+
+COMMAND LINE
+sudo nmap -sA -sV TARGET_IP
+
+GENERAL KNOWLEDGE
+This kind of scan would be helpful if there is a firewall in front of the target. Consequently, based on which ACK packets resulted in responses, you will learn which ports were not blocked by the firewall. In other words, this type of scan is more suitable to discover firewall rule sets and configuration.
+
+
+6. WINDOW SCAN
+
+HOW IT WORKS
+Similar to the TCP window scan. The TCP window scan is almost the same as the ACK scan; however, it examines the TCP Window field of the RST packets returned. On specific systems, this can reveal that the port is open.
+
+SCHEME
+  _______________              _______________
+| HOST SCANNING | -> ACK  -> |     TARGET    |
+|    MACHINE    | -> FLAG -> |     MACHINE   |
+ ---------------              ---------------
+
+ _______________              _______________
+| HOST SCANNING | <- RST  <- |     TARGET    |
+|    MACHINE    | <- FLAG <- |     MACHINE   |
+ ---------------              ---------------
+        case: TCP Port is open or closed
+
+COMMAND LINE
+sudo nmap -sW -sV TARGET_IP
+
+GENERAL KNOWLEDGE
+In contrast with the TCP ACK Scan, the Window Scan analyzes the RST Packet so it can show as more info on ports that maybe the firewall does not protect.
+
+
+7. CUSTOM SCAN
+
+HOW IT WORKS
+TCP Scan with custom flag setting.
+
+SCHEME
+  _______________                 _______________
+| HOST SCANNING | -> CUSTOM   -> |     TARGET    |
+|    MACHINE    | -> FLAG SET -> |     MACHINE   |
+ ---------------                  ---------------
+
+ _______________             _______________
+| HOST SCANNING | <- ??? <- |     TARGET    |
+|    MACHINE    | <- ??? <- |     MACHINE   |
+ ---------------             ---------------
+
+COMMAND LINE
+sudo nmap --scanflags -sV CUSTOM_FLAGS TARGET_IP
+
+
+
+
+! IMPORTANT NOTICE !
+This is not a full-scope cheat sheet about Nmap so I strongly recommend to advise the tool's manual (nmap --help // nmap -h)
+This is a cheat sheet about live host discovery and basic/advanced port scanning techniques
+
+
+made by @gr1m.r34p3r1337
